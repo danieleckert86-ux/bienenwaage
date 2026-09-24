@@ -1,0 +1,22 @@
+name: Backfill one-year bee history
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/backfill-history.yml'
+  workflow_dispatch:
+
+jobs:
+  backfill:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'Run one-year history backfill')
+    strategy:
+      fail-fast: false
+      matrix:
+        offset: [0, 28, 56, 84, 112, 140, 168, 196, 224, 252, 280, 308, 336]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Backfill 28-day block
+        run: |
+          curl --fail --silent --show-error --retry 3 \
+            "https://bienenwaage.vercel.app/api/backfill?offsetDays=${{ matrix.offset }}&spanDays=28"
