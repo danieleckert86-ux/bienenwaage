@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { ensureSchema, newestMeasurement, readHistory } from '../lib/db.js';
+import { ensureSchema, newestMeasurement, readHistory, readLatest } from '../lib/db.js';
 import { HIVES } from '../lib/hives.js';
 import { syncAll } from '../lib/sync.js';
 
@@ -26,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         points = [...daily.values()].sort((a,b) => a.t-b.t);
       }
-      hives.push({ key: hive.key, name: hive.name, lastSync: newest, points });
+      const latest = await readLatest(hive.key);\n      hives.push({ key: hive.key, name: hive.name, lastSync: newest, latest, points });
     }
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json({ source: 'neon', hives });
