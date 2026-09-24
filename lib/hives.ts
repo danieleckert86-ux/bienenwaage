@@ -18,3 +18,24 @@ export async function fetchThingSpeak(hive: Hive, results = 800): Promise<Point[
     .filter(point => Number.isFinite(point.t) && Number.isFinite(point.v))
     .sort((a,b) => a.t-b.t);
 }
+
+
+function tsDate(d: Date) {
+  return d.toISOString().slice(0,19).replace('T',' ');
+}
+
+export async function fetchThingSpeakRange(hive: Hive, start: Date, end: Date): Promise<Point[]> {
+  const params = new URLSearchParams({
+    start: tsDate(start),
+    end: tsDate(end),
+    results: '8000'
+  });
+  const url = 'https://api.thingspeak.com/channels/' + hive.channel + '/fields/' + hive.field + '.json?' + params.toString();
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('ThingSpeak ' + response.status);
+  const body = await response.json() as { feeds?: Array<Record<string, string>> };
+  return (body.feeds || [])
+    .map(feed => ({ t: new Date(feed.created_at).getTime(), v: Number(feed['field' + hive.field]) }))
+    .filter(point => Number.isFinite(point.t) && Number.isFinite(point.v))
+    .sort((a,b) => a.t-b.t);
+}
