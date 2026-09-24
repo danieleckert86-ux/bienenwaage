@@ -65,3 +65,16 @@ export async function newestMeasurement(): Promise<number | null> {
   const rows = await q`SELECT MAX(measured_at) AS newest FROM hive_measurements`;
   return rows[0]?.newest ? new Date(String(rows[0].newest)).getTime() : null;
 }
+
+
+export async function readLatest(hiveKey: string) {
+  const q = sql();
+  const rows = await q`
+    SELECT measured_at, weight_kg
+    FROM hive_measurements
+    WHERE hive_key = ${hiveKey}
+    ORDER BY measured_at DESC
+    LIMIT 1
+  `;
+  return rows.length ? { t: new Date(String(rows[0].measured_at)).getTime(), v: Number(rows[0].weight_kg) } : null;
+}
