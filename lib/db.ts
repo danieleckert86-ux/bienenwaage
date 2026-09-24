@@ -27,14 +27,23 @@ export async function ensureSchema() {
 export async function insertPoints(hive: Hive, points: Point[]) {
   if (!points.length) return;
   const q = sql();
-  for (const p of points) {
-    await q`
-      INSERT INTO hive_measurements (hive_key, hive_name, measured_at, weight_kg)
-      VALUES (${hive.key}, ${hive.name}, ${new Date(p.t).toISOString()}, ${p.v})
-      ON CONFLICT (hive_key, measured_at)
-      DO UPDATE SET weight_kg = EXCLUDED.weight_kg, hive_name = EXCLUDED.hive_name
-    `;
-  }
+  const payload = JSON.stringify(points.map(p => ({
+    measured_at: new Date(p.t).toISOString(),
+    weight_kg: p.v
+  })));
+  await q`
+    INSERT INTO hive_measurements (hive_key, hive_name, measured_at, weight_kg)
+    SELECT
+      ${hive.key},
+      ${hive.name},
+      x.measured_at::timestamptz,
+      x.weight_kg::double precision
+    FROM json_to_recordset(${payload}::json) AS x(measured_at text, weight_kg double precision)
+    ON CONFLICT (hive_key, measured_at)
+    DO UPDATE SET
+      weight_kg = EXCLUDED.weight_kg,
+      hive_name = EXCLUDED.hive_name
+  `;
 }
 
 export async function latestTimestamp(hiveKey: string): Promise<number | null> {
