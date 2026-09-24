@@ -1,0 +1,15 @@
+name: Archive ThingSpeak data
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Bienenwaage archive sync
+        run: |
+          curl --fail --silent --show-error --retry 3 \
+            https://bienenwaage-daniel-c82d.vercel.app/api/cron
