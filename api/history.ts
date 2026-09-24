@@ -26,7 +26,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         points = [...daily.values()].sort((a,b) => a.t-b.t);
       }
-      const latest = await readLatest(hive.key);\n      hives.push({ key: hive.key, name: hive.name, lastSync: newest, latest, points });
+      const latest = await readLatest(hive.key);
+      hives.push({ key: hive.key, name: hive.name, lastSync: newest, latest, points });
     }
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
     return res.status(200).json({ source: 'neon', hives });
