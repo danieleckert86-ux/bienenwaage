@@ -11,6 +11,7 @@ const hives: Hive[] = [
 let days = 365;
 const enabled = new Set(hives.map(h => h.name));
 let data = new Map<string, Point[]>();
+let latestData = new Map<string, Point>();
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const fmt = (n: number) => Number.isFinite(n) ? n.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1}) : '–';
@@ -60,12 +61,14 @@ async function requestJson(url:string, init?:RequestInit) {
 async function loadArchive(rangeDays:number) {
   const body = await requestJson('/api/history?days='+Math.max(rangeDays,8));
   const map = new Map<string,Point[]>();
+  const latest = new Map<string,Point>();
   let newest=0;
   for(const h of body.hives || []) {
     map.set(h.name,(h.points||[]).map((p:Point)=>({t:Number(p.t),v:Number(p.v)})).filter((p:Point)=>Number.isFinite(p.v)));
+    if(h.latest && Number.isFinite(Number(h.latest.v))) latest.set(h.name,{t:Number(h.latest.t),v:Number(h.latest.v)});
     newest=Math.max(newest,Number(h.lastSync||0));
   }
-  return { map, newest };
+  return { map, latest, newest };
 }
 async function refresh(sync=false) {
   const status=el<HTMLDivElement>('status');
@@ -74,7 +77,7 @@ async function refresh(sync=false) {
   try {
     if(sync) await requestJson('/api/sync', { method:'POST' });
     const loaded=await loadArchive(days);
-    data=loaded.map; renderCards(); renderLegend(); draw();
+    data=loaded.map; latestData=loaded.latest; renderCards(); renderLegend(); draw();
     status.className='status';
     el('updated').textContent=loaded.newest?'Archiv\n'+new Date(loaded.newest).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'Archiv bereit';
   } catch (error) {
@@ -85,7 +88,7 @@ async function refresh(sync=false) {
 }
 function renderCards() {
   el('cards').innerHTML=hives.map(h=>{
-    const pts=data.get(h.name)||[], latest=pts.at(-1)?.v??NaN;
+    const pts=data.get(h.name)||[], latest=latestData.get(h.name)?.v??pts.at(-1)?.v??NaN;
     return '<article class="hive-card"><div class="hive-top"><span class="dot" style="background:'+h.color+'"></span>'+h.name+'</div><div class="weight">'+fmt(latest)+'<span class="unit">kg</span></div><div class="changes"><span>24 h<strong>'+deltaText(delta(pts,24))+'</strong></span><span>7 Tage<strong>'+deltaText(delta(pts,168))+'</strong></span></div></article>';
   }).join('');
 }
