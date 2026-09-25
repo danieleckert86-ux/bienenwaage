@@ -57,6 +57,6 @@ export async function syncAll() {
     }));
     return {ok:channels.every(c=>c.ok),skipped:false,channels};
   } finally {
-    await run(sql`UPDATE bee_sync_lease SET expires_at=now() WHERE id=1 AND token=${token}`);
+    await run(sql`UPDATE bee_sync_lease SET expires_at=now(),next_allowed_at=now()+interval '2 minutes' WHERE id=1 AND token=${token}`);
   }
 }
