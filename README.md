@@ -58,3 +58,7 @@ Rollback: redeploy the previous production revision. Additive sync tables do not
 Monthly orientation adapted for Dadant, Nassenheider formic-acid summer treatment and oxalic-acid sublimation in winter. Weather, colony development, forage and measured Varroa infestation always take precedence. Product instructions, approved uses and required protective equipment govern treatment; the dashboard does not provide doses.
 
 Sources: LWG Bienenpflege, Sommerbehandlung, Winterbehandlung (linked in the app).
+
+## Active production database (2026-09-25)
+
+Production uses Neon branch `br-blue-paper-b2856b6e`, named `production-dashboard`. It was cloned from the original branch and retains all 311,892 original raw records; per-colony ordered checksums and counts were verified identical before adoption. New readings are appended there. The original `br-wild-cherry-b2zuipsm` remains preserved. Vercel Preview currently points to the same branch: do not run destructive tests or migrations there. Future preview work must use a fresh isolated branch.
