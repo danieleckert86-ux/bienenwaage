@@ -1,117 +1,71 @@
+import { Chart,LineController,LineElement,PointElement,LinearScale,Tooltip,Filler,type ChartDataset } from 'chart.js';
+import { MONTHS,YEAR } from './year';
 import './styles.css';
-
-type Hive = { name: string; color: string };
-type Point = { t: number; v: number };
-const hives: Hive[] = [
-  { name: 'Rotes Volk', color: '#c94d44' },
-  { name: 'Gelbes Volk', color: '#d6a928' },
-  { name: 'Schnecken-Volk', color: '#708e62' },
-  { name: 'Ameisenbär-Volk', color: '#566c8e' },
-];
-let days = 365;
-const enabled = new Set(hives.map(h => h.name));
-let data = new Map<string, Point[]>();
-let latestData = new Map<string, Point>();
-
-const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const fmt = (n: number) => Number.isFinite(n) ? n.toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1}) : '–';
-const delta = (pts: Point[], hours: number) => {
-  if (!pts.length) return NaN;
-  const latest=pts[pts.length-1], target=latest.t-hours*3600000;
-  let best=pts[0];
-  for(const p of pts) if(Math.abs(p.t-target)<Math.abs(best.t-target)) best=p;
-  return latest.v-best.v;
-};
-const deltaText=(v:number)=>Number.isFinite(v)?(v>=0?'+':'')+fmt(v)+' kg':'–';
-
-type YearTask = { icon: string; title: string; detail: string };
-type YearStep = { month: string; phase: string; tasks: YearTask[]; next: string };
-const beeYear: YearStep[] = [
-  { month:'Januar',phase:'Winterruhe · Futter im Blick',tasks:[{icon:'⚖',title:'Futtervorrat beobachten',detail:'Gewichtsverlauf nutzen; bei auffälligem Verlust oder leichtem Volk Futterlage prüfen.'},{icon:'⌂',title:'Stand kontrollieren',detail:'Flugloch, Mäuseschutz, Sturm- und Feuchteschäden äußerlich prüfen.'},{icon:'◌',title:'Varroa-Nachkontrolle',detail:'Nach Winterbehandlung Behandlungserfolg über natürlichen Milbenfall beurteilen.'}],next:'Material und Honigräume vorbereiten; Futterkontrolle bleibt bis zum sicheren Trachtbeginn wichtig.'},
-  { month:'Februar',phase:'Übergang zur Auswinterung',tasks:[{icon:'⚖',title:'Futter bleibt Priorität',detail:'Brutbeginn erhöht den Verbrauch. Waage auf stärkeren Gewichtsverlust beobachten.'},{icon:'☀',title:'Reinigungsflug beobachten',detail:'Flugbild und Auffälligkeiten notieren; Völker bei Kälte nicht unnötig öffnen.'},{icon:'▤',title:'Dadant vorbereiten',detail:'Schiede, saubere Brutraumwaben und Honigräume für die Saison bereithalten.'}],next:'Bei geeigneter Witterung folgt die erste kurze Volkskontrolle und das Anpassen des Brutraums.'},
-  { month:'März',phase:'Auswinterung · Dadant-Brutraum anpassen',tasks:[{icon:'⚖',title:'Futter und Weiselrichtigkeit prüfen',detail:'Kurze Kontrolle bei geeignetem Flugwetter; Brutbild und Vorräte beurteilen.'},{icon:'▥',title:'Brutraum mit Schied anpassen',detail:'Dadant-Brutraum an Volksstärke und Brutnest anpassen, ohne das Brutnest unnötig auseinanderzureißen.'},{icon:'◌',title:'Varroa-Frühjahrsdiagnose',detail:'Gemüll bzw. geeignete Befallskontrolle nutzen und auffällige Völker markieren.'}],next:'Mit zunehmender Volksstärke rechtzeitig Raum geben; Honigraum und Schwarmzeit vorbereiten.'},
-  { month:'April',phase:'Aufwärtsentwicklung · Raum geben',tasks:[{icon:'▦',title:'Honigraum rechtzeitig geben',detail:'An Volksstärke und Tracht orientieren; bei Dadant Brutraum gezielt führen und Honigraum erweitern.'},{icon:'♙',title:'Schwarmkontrollen beginnen',detail:'Ab einsetzender Schwarmzeit regelmäßig kontrollieren; Takt an Entwicklung und Wetter anpassen.'},{icon:'○',title:'Drohnenrahmen / Biotechnik',detail:'Drohnenbrutmanagement kann die Varroaentwicklung während der Saison bremsen.'}],next:'Mai ist meist Hochphase von Tracht, Erweiterung, Schwarmkontrolle und Ablegerbildung.'},
-  { month:'Mai',phase:'Hauptentwicklung · Schwarmzeit',tasks:[{icon:'♙',title:'Wöchentlich Schwarmstimmung prüfen',detail:'Genügend Platz für die Königin und Schwarmzellen kontrollieren.'},{icon:'▦',title:'Honigräume nach Bedarf erweitern',detail:'Eintrag und Platz beobachten; Gewichtsanstieg der Waage als zusätzlichen Hinweis nutzen.'},{icon:'＋',title:'Ablegerbildung planen',detail:'Starke Völker nutzen; zugleich Varroadruck durch biotechnische Maßnahmen begrenzen.'}],next:'Schwarmkontrollen laufen weiter; Honigernte und Jungvolkpflege rücken näher.'},
-  { month:'Juni',phase:'Tracht · Ernte · Jungvölker',tasks:[{icon:'♙',title:'Schwarmkontrolle fortsetzen',detail:'Bis zum Ende der Schwarmphase eng am tatsächlichen Volkszustand bleiben.'},{icon:'⬡',title:'Honigreife und Ernte planen',detail:'Nicht nur Kalender, sondern Trachtende und Honigreife entscheiden lassen.'},{icon:'◌',title:'Varroa im Blick behalten',detail:'Befall ermitteln; während Trachtnutzung keine routinemäßige medikamentöse Behandlung im Wirtschaftsvolk.'}],next:'Nach Trachtende beginnt die entscheidende Phase für Varroabehandlung, Fütterung und gesunde Winterbienen.'},
-  { month:'Juli',phase:'Nach der Ernte · neues Bienenjahr beginnt',tasks:[{icon:'◌',title:'Varroabefall bestimmen',detail:'Vor der Sommerbehandlung Befall erfassen und Dringlichkeit beurteilen.'},{icon:'⚗',title:'Sommerbehandlung vorbereiten',detail:'Nassenheider/Ameisensäure ist eine Option bei Völkern mit Brut. Varroawetter und Packungsbeilage beachten.'},{icon:'▰',title:'Fütterung starten',detail:'Nach Trachtende Futterversorgung sichern und Behandlung/Fütterung sinnvoll aufeinander abstimmen.'}],next:'Im August stehen Winterbienen im Mittelpunkt: Futter, Varroawirkung und Volksstärke eng kontrollieren.'},
-  { month:'August',phase:'Winterbienen schützen · auffüttern',tasks:[{icon:'⚗',title:'Varroabehandlung durchführen / kontrollieren',detail:'Ameisensäure mit Nassenheider nur passend zu Präparat, Befall und Wetter einsetzen.'},{icon:'▰',title:'Weiter auffüttern',detail:'Futtervorrat und Platz für Brut beachten; Gewichtsverlauf hilft bei der Kontrolle.'},{icon:'✓',title:'Behandlungserfolg nachprüfen',detail:'Nach ausreichender Nachwirkzeit Restbefall bestimmen; Reinvasion berücksichtigen.'}],next:'Bis Ende September sollten Futterversorgung und Varroasituation belastbar sein.'},
-  { month:'September',phase:'Einwinterung abschließen',tasks:[{icon:'⚖',title:'Winterfutter kontrollieren',detail:'Zielvorrat betriebsspezifisch prüfen und fehlendes Futter rechtzeitig ergänzen.'},{icon:'◌',title:'Varroa erneut kontrollieren',detail:'Reinvasion ist möglich. Nicht allein davon ausgehen, dass die Sommerbehandlung dauerhaft genügt.'},{icon:'↔',title:'Volksstärke beurteilen',detail:'Schwache oder problematische Einheiten rechtzeitig bewerten und Betriebsweise entsprechend anpassen.'}],next:'Oktober: Wintersicherung, Flugloch/Mäuseschutz und möglichst wenig störende Eingriffe.'},
-  { month:'Oktober',phase:'Wintersicherung',tasks:[{icon:'⌂',title:'Mäuseschutz und Beute prüfen',detail:'Flugloch, Deckel, Standfestigkeit und Feuchteschutz kontrollieren.'},{icon:'⚖',title:'Futter plausibilisieren',detail:'Waage nutzen, ohne das Volk unnötig zu öffnen.'},{icon:'◌',title:'Varroa im Auge behalten',detail:'Bei Bienenflug bleibt Reinvasion möglich; auffälligen Milbenfall ernst nehmen.'}],next:'Im November/Dezember Brutfreiheit feststellen und Winterbehandlung passend planen.'},
-  { month:'November',phase:'Winterruhe · Brutfreiheit prüfen',tasks:[{icon:'◌',title:'Brutzustand feststellen',detail:'Für eine wirksame Oxalsäure-Restentmilbung ist Brutfreiheit entscheidend; nicht nur nach Datum entscheiden.'},{icon:'⚗',title:'Oxalsäure-Verdampfung planen',detail:'Nur mit dafür zugelassenem Präparat/Gerät und exakt nach aktueller Packungsbeilage anwenden.'},{icon:'⌂',title:'Äußerliche Standkontrolle',detail:'Ruhe bewahren; Störungen und unnötiges Öffnen vermeiden.'}],next:'Bei bestätigter Brutfreiheit liegt die Restentmilbung typischerweise im Spätherbst/Winter.'},
-  { month:'Dezember',phase:'Restentmilbung · Winterruhe',tasks:[{icon:'⚗',title:'Oxalsäure bei Brutfreiheit',detail:'Verdampfung nur entsprechend Zulassung von Präparat und Gerät; Schutz- und Anwendungsvorgaben strikt beachten.'},{icon:'✓',title:'Behandlung dokumentieren',detail:'Varroa-Arzneimittelanwendungen gehören ins Bestandsbuch bzw. in die Stockkarte.'},{icon:'⌂',title:'Danach Ruhe',detail:'Stand äußerlich kontrollieren und Völker möglichst ungestört lassen.'}],next:'Im Januar Behandlungserfolg und Futterentwicklung beobachten; dann beginnt der Kreislauf erneut.'}
-];
-
-function renderBeeYear() {
-  const now = new Date();
-  const index = now.getMonth();
-  const step = beeYear[index];
-  el('year-month').textContent = step.month;
-  el('year-phase').textContent = step.phase;
-  el('year-now').innerHTML = step.tasks.map(t => '<div class="year-task"><div class="ico">'+t.icon+'</div><div><strong>'+t.title+'</strong><span>'+t.detail+'</span></div></div>').join('');
-  el('year-next').textContent = step.next;
-  el('year-all').innerHTML = beeYear.map((s,i) => '<div class="year-row"><strong>'+(i===index?'→ ':'')+s.month+'</strong><span>'+s.phase+' · '+s.tasks.map(t=>t.title).join(' · ')+'</span></div>').join('');
+Chart.register(LineController,LineElement,PointElement,LinearScale,Tooltip,Filler);
+type Point={t:number;v:number};
+type Hive={key:string;name:string;color:string;latest:Point|null;delta24:number|null;delta7:number|null;reference24:number|null;reference7:number|null;firstAt:number|null;jump:{t:number;delta:number}|null;points:Point[]};
+type Data={source:string;generatedAt:number;start:number;end:number;days:number;bucketSeconds:number;hives:Hive[];sync:{channel:number;cursor_at:string|null;succeeded_at:string|null;attempted_at:string|null;last_error:string|null}[]};
+const number=new Intl.NumberFormat('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const date=(t:number,full=false)=>new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',day:'2-digit',month:'2-digit',...(full?{year:'numeric' as const}:{}),hour:'2-digit',minute:'2-digit'}).format(t);
+const delta=(v:number|null)=>v===null?'—':`${v>0?'+':v<0?'−':''}${number.format(Math.abs(v))}`;
+const escape=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+const actualMonth=Number(new Intl.DateTimeFormat('en',{month:'numeric',timeZone:'Europe/Berlin'}).format(new Date()))-1;
+let month=actualMonth,days=7,relative=false,data:Data|null=null,chart:Chart<'line'>|null=null,busy=false,requestId=0;
+const hidden=new Set<string>();
+const refreshIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 7a7 7 0 0 1 11.8-1L20 9M4 15l2.1 3A7 7 0 0 0 18 17"/></svg>';
+document.querySelector<HTMLDivElement>('#app')!.innerHTML=`
+<header class="topbar"><div class="top-inner"><a href="/" class="brand"><img src="/favicon.svg" alt="" width="36" height="36"><span>Bienenstand<span class="brand-small">DEINE VIER VÖLKER</span></span></a><nav aria-label="Hauptnavigation"><a href="#overview" class="nav-active">Übersicht</a><a href="#bienenjahr">Bienenjahr <span aria-hidden="true">↗</span></a></nav></div></header>
+<main><section id="overview" aria-labelledby="main-title"><div class="page-heading"><div><p class="eyebrow">AM BIENENSTAND</p><h1>Wie geht’s deinen Bienen?</h1><p class="intro">Gewicht und Entwicklung auf einen Blick.</p></div><button id="refresh" class="refresh">${refreshIcon}<span>Aktualisieren</span></button></div>
+<div class="status-line"><span id="status" role="status" aria-live="polite">Archiv wird geladen …</span><span class="timezone">Alle Zeiten: Europe/Berlin</span></div>
+<div id="message" role="status" aria-live="polite"></div><div id="cards" class="cards" aria-busy="true">${Array.from({length:4},()=>'<div class="hive-card skeleton"><div></div><div></div><div></div></div>').join('')}</div>
+<div class="workspace"><section class="chart-panel" aria-labelledby="chart-title"><div class="panel-heading"><div><p class="eyebrow">GEMEINSAM BETRACHTET</p><h2 id="chart-title">Gewichtsverlauf</h2></div><div class="ranges" role="group" aria-label="Zeitraum">${[[1,'24 h'],[7,'7 Tage'],[30,'30 Tage'],[365,'1 Jahr']].map(([v,label])=>`<button data-days="${v}" aria-pressed="${v===7}">${label}</button>`).join('')}</div></div>
+<div class="chart-options"><div id="legend" class="legend" role="group" aria-label="Völker im Diagramm"></div><label class="compare"><input id="relative" type="checkbox"><span>Änderung seit Beginn</span></label></div><div class="chart-wrap"><canvas id="chart" role="img" aria-label="Gewichtsverlauf der ausgewählten Bienenvölker"></canvas><p id="chart-empty" hidden></p></div><div class="chart-footer"><span id="chart-note">Messwerte werden geladen.</span><span>Tippen für Messwerte</span></div><details class="data-detail"><summary>Messwerte als Tabelle</summary><div id="data-table"></div></details></section>
+<aside class="insights" aria-labelledby="insight-title"><p class="eyebrow">GENAUER HINSEHEN</p><h2 id="insight-title">Am Stand im Blick</h2><div id="insights"><p class="muted">Hinweise werden geladen.</p></div><p class="aside-note">Gewichtssprünge können von Fütterung, Ernte, Wetter oder einem Schwarm kommen. Die Waage gibt Hinweise, keine Diagnose.</p></aside></div></section>
+<section id="bienenjahr" class="year-panel" aria-labelledby="year-title"><div class="year-heading"><div><p class="eyebrow">DEIN BEGLEITER DURCHS JAHR</p><h2 id="year-title">Das Bienenjahr</h2></div><span class="dadant">Dadant · Augsburg</span></div><div class="month-strip" role="group" aria-label="Monat wählen">${MONTHS.map((m,i)=>`<button data-month="${i}" aria-pressed="${i===month}" ${i===actualMonth?'class="current-month"':''}>${m.slice(0,3)}${i===actualMonth?'<span class="sr-only"> – aktueller Monat</span>':''}</button>`).join('')}</div><div id="month-content"></div><p class="year-note">Orientierung für deinen Bienenstand: Wetter, Volksentwicklung, Tracht und Varroabefall gehen immer vor dem Kalendermonat.</p><details class="sources"><summary>Fachliche Grundlagen</summary><p>Monatliche Orientierung für Dadant, keine Dosierungsanleitung. Behandlung nur mit zugelassenem Präparat und nach dessen Gebrauchsinformation sowie Geräteanleitung.</p><a href="https://www.lwg.bayern.de/bienen/haltung/096308/index.php" target="_blank" rel="noopener">LWG: Bienenpflege</a><a href="https://www.lwg.bayern.de/bienen/krankheiten/094761/index.php" target="_blank" rel="noopener">LWG: Sommerbehandlung</a><a href="https://www.lwg.bayern.de/bienen/krankheiten/093088/index.php" target="_blank" rel="noopener">LWG: Winterbehandlung</a></details></section>
+<footer><span>Bienenstand <span aria-hidden="true">/</span> Vier Völker. Ein Überblick.</span><details id="archive"><summary>Archiv & Datenstand</summary><div id="archive-detail">Noch keine Daten geladen.</div></details></footer></main>`;
+const el=(id:string)=>document.getElementById(id)!;
+function age(t:number){const m=Math.max(0,Math.floor((Date.now()-t)/60000));return m<1?'gerade eben':m<60?`vor ${m} Min.`:m<1440?`vor ${Math.floor(m/60)} Std.`:`vor ${Math.floor(m/1440)} Tagen`;}
+function stale(h:Hive){return !h.latest||Date.now()-h.latest.t>3600000;}
+function setMessage(text:string,error=false){el('message').innerHTML=text?`<div class="message ${error?'error':''}">${escape(text)}</div>`:'';}
+function renderCards(){if(!data)return;
+ el('cards').setAttribute('aria-busy','false');
+ el('cards').innerHTML=data.hives.map((h,i)=>`<article class="hive-card" style="--hive:${h.color}"><div class="card-top"><h2><span class="hive-mark" aria-hidden="true">${String(i+1).padStart(2,'0')}</span>${h.name}</h2><span class="card-state ${stale(h)?'late':''}">${stale(h)?'Veraltet':'Aktuell'}</span></div><div class="weight">${h.latest?number.format(h.latest.v):'—'}<span>kg</span></div><div class="deltas"><div><span>24 Stunden</span><strong class="${h.delta24!==null&&h.delta24<0?'negative':'positive'}">${delta(h.delta24)} <small>${h.delta24!==null?'kg':''}</small></strong></div><div><span>7 Tage</span><strong class="${h.delta7!==null&&h.delta7<0?'negative':'positive'}">${delta(h.delta7)} <small>${h.delta7!==null?'kg':''}</small></strong></div></div><div class="card-bottom"><span class="mini-trend" aria-hidden="true">${h.delta24===null?'—':h.delta24>0?'↗':h.delta24<0?'↘':'→'}</span><span>${h.latest?`<time datetime="${new Date(h.latest.t).toISOString()}" title="${date(h.latest.t,true)}">${date(h.latest.t)} · ${age(h.latest.t)}</time>`:'Keine Messung vorhanden'}</span></div></article>`).join('');
+ const old=data.hives.filter(stale);el('status').innerHTML=`<span class="status-dot ${old.length?'warning':''}"></span>${old.length?`${old.length} von 4 Völkern ohne frische Messung`:'Alle 4 Völker senden Daten'} <span class="status-extra">· Abgerufen ${new Intl.DateTimeFormat('de-DE',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Berlin'}).format(data.generatedAt)}</span>`;
+ el('legend').innerHTML=data.hives.map(h=>`<button data-hive="${h.key}" aria-pressed="${!hidden.has(h.key)}" style="--hive:${h.color}"><span class="legend-dot"></span>${h.name.replace(' Volk','').replace('-Volk','')}</button>`).join('');
+ renderInsights();
+ el('archive-detail').innerHTML=`<p>Rohmesswerte werden dauerhaft archiviert. Änderungen beziehen sich auf die letzte Messung und einen Vergleichswert höchstens 60 Minuten vor dem Zielzeitpunkt. Fehlt dieser, steht dort „—“.</p><ul>${data.hives.map(h=>`<li>${h.name}: seit ${h.firstAt?date(h.firstAt,true):'—'}</li>`).join('')}</ul><h3>Letzter erfolgreicher Abruf je Kanal</h3><ul>${data.sync.map(s=>`<li>${s.channel}: ${s.succeeded_at?date(Date.parse(s.succeeded_at),true):'noch kein Abruf'}${s.last_error?' · Abruf fehlgeschlagen':''}${s.cursor_at?`<br>Rückstände geprüft bis ${date(Date.parse(s.cursor_at),true)}`:''}</li>`).join('')}</ul><p>Automatischer Abgleich etwa alle 15 Minuten. GitHub Actions kann Ausführungen verzögern. Rohwerte bleiben auch bei verdichteter Diagrammansicht erhalten.</p>`;
 }
-
-async function requestJson(url:string, init?:RequestInit) {
-  const response = await fetch(url, init);
-  const body = await response.json();
-  if (!response.ok) throw new Error(body?.error || ('HTTP '+response.status));
-  return body;
+function renderInsights(){if(!data)return;const items:{title:string;text:string;warn:boolean}[]=[];
+ for(const h of data.hives){if(stale(h))items.push({title:`${h.name}: Daten fehlen`,text:h.latest?`Letzte Messung ${date(h.latest.t)}. Waage, Verbindung und Import prüfen.`:'Noch keine Messwerte vorhanden.',warn:true});if(h.jump)items.push({title:`${h.name}: Gewichtssprung`,text:`${delta(h.jump.delta)} kg zwischen zwei Messungen · ${date(h.jump.t)}. Eingriff oder Ursache prüfen.`,warn:true});}
+ if(data.sync.some(s=>s.last_error))items.push({title:'Archivierung prüfen',text:'Mindestens ein Kanal konnte zuletzt nicht vollständig abgerufen werden. Vorhandene Messwerte bleiben sichtbar.',warn:true});
+ if(!items.length){items.push({title:'Keine großen Sprünge',text:'In den letzten 24 Stunden kein Sprung ab 2 kg zwischen Messungen mit höchstens 30 Minuten Abstand erkannt.',warn:false});const hs=data.hives.filter(h=>h.delta24!==null);if(hs.length){const down=hs.filter(h=>h.delta24!<0).length;items.push({title:down===hs.length?'Alle Völker nehmen ab':down===0?'Alle Völker stabil oder im Plus':`${down} von ${hs.length} Völkern nehmen ab`,text:'Vergleich zum Gewicht vor 24 Stunden. Futtergaben und Arbeiten an den Beuten mit berücksichtigen.',warn:false});}}
+ el('insights').innerHTML=items.map(i=>`<div class="insight"><span class="insight-icon ${i.warn?'warn':''}" aria-hidden="true">${i.warn?'!':'↗'}</span><div><h3>${i.title}</h3><p>${i.text}</p></div></div>`).join('');
 }
-async function loadArchive(rangeDays:number) {
-  const body = await requestJson('/api/history?days='+Math.max(rangeDays,8));
-  const map = new Map<string,Point[]>();
-  const latest = new Map<string,Point>();
-  let newest=0;
-  for(const h of body.hives || []) {
-    map.set(h.name,(h.points||[]).map((p:Point)=>({t:Number(p.t),v:Number(p.v)})).filter((p:Point)=>Number.isFinite(p.v)));
-    if(h.latest && Number.isFinite(Number(h.latest.v))) latest.set(h.name,{t:Number(h.latest.t),v:Number(h.latest.v)});
-    newest=Math.max(newest,Number(h.lastSync||0));
-  }
-  return { map, latest, newest };
+function drawChart(){if(!data)return;chart?.destroy();
+ const visible=data.hives.filter(h=>!hidden.has(h.key)),hasPoints=visible.some(h=>h.points.length);
+ el('chart-empty').hidden=hasPoints;el('chart-empty').textContent=visible.length?'Keine Messwerte in diesem Zeitraum.':'Wähle mindestens ein Volk aus.';
+ const formatTick=(t:number)=>new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',...(days===1?{hour:'2-digit' as const,minute:'2-digit' as const}:days===365?{month:'short' as const}:{day:'2-digit' as const,month:'2-digit' as const})}).format(t);
+ const datasets:ChartDataset<'line'>[]=data.hives.map(h=>{
+  const base=relative?(h.points[0]?.v??0):0;
+  // Explicit breaks prevent drawing across outages, even after server-side reduction.
+  const points:{x:number;y:number|null}[]=[];
+  h.points.forEach((p,i)=>{if(i&&p.t-h.points[i-1].t>Math.max(data!.bucketSeconds*2000,3600000))points.push({x:p.t-1,y:null});points.push({x:p.t,y:p.v-base});});
+  return {label:h.name,data:points as any,borderColor:h.color,backgroundColor:h.color,borderWidth:2,pointRadius:h.points.length===1?3:0,pointHoverRadius:5,pointHitRadius:14,tension:0,spanGaps:false,hidden:hidden.has(h.key)};
+ });
+ chart=new Chart<'line'>(el('chart') as HTMLCanvasElement,{type:'line',data:{datasets},options:{responsive:true,maintainAspectRatio:false,animation:false,normalized:true,parsing:false,interaction:{mode:'nearest',intersect:false},plugins:{legend:{display:false},tooltip:{backgroundColor:'#172e29',padding:12,displayColors:true,callbacks:{title:items=>items.length?date(items[0].parsed.x!,true):'',label:ctx=>`${ctx.dataset.label}: ${relative?delta(ctx.parsed.y):number.format(ctx.parsed.y!)} kg`}}},scales:{x:{type:'linear',min:data.start,max:data.end,grid:{display:false},border:{display:false},ticks:{maxTicksLimit:window.innerWidth<600?4:7,color:'#75817e',font:{size:12},callback:value=>formatTick(Number(value)),maxRotation:0}},y:{title:{display:true,text:relative?'Änderung · kg':'Gewicht · kg',color:'#75817e'},border:{display:false},grid:{color:'#e9edeb'},ticks:{maxTicksLimit:6,color:'#75817e',font:{size:12},callback:value=>new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(Number(value))}}}}});
+ el('chart-note').textContent=`${days===1?'5-Minuten':days===7?'30-Minuten':days===30?'2-Stunden':'Tages'}-Fenster · Anfang, Tief, Hoch & Ende${relative?' · Je Volk ab erstem Wert im Zeitraum':''}`;
+ const rows=visible.flatMap(h=>h.points.map(p=>({h,p}))).sort((a,b)=>b.p.t-a.p.t).slice(0,80);
+ el('data-table').innerHTML=`<p>Die letzten ${rows.length} dargestellten Messpunkte der ausgewählten Völker. Die Tabelle zeigt die ursprünglichen Gewichte.</p><table><thead><tr><th>Zeit</th><th>Volk</th><th>kg</th></tr></thead><tbody>${rows.map(({h,p})=>`<tr><td>${date(p.t)}</td><td>${h.name}</td><td>${number.format(p.v)}</td></tr>`).join('')}</tbody></table>`;
 }
-async function refresh(sync=false) {
-  const status=el<HTMLDivElement>('status');
-  status.className='status show';
-  status.textContent=sync?'Neue Messwerte werden archiviert …':'Archiv wird geladen …';
-  try {
-    if(sync) await requestJson('/api/sync', { method:'POST' });
-    const loaded=await loadArchive(days);
-    data=loaded.map; latestData=loaded.latest; renderCards(); renderLegend(); draw();
-    status.className='status';
-    el('updated').textContent=loaded.newest?'Archiv\n'+new Date(loaded.newest).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'Archiv bereit';
-  } catch (error) {
-    console.error(error);
-    status.className='status show error';
-    status.textContent='Das Messwert-Archiv konnte nicht geladen werden. Tippe auf ↻.';
-  }
-}
-function renderCards() {
-  el('cards').innerHTML=hives.map(h=>{
-    const pts=data.get(h.name)||[], latest=latestData.get(h.name)?.v??pts.at(-1)?.v??NaN;
-    return '<article class="hive-card"><div class="hive-top"><span class="dot" style="background:'+h.color+'"></span>'+h.name+'</div><div class="weight">'+fmt(latest)+'<span class="unit">kg</span></div><div class="changes"><span>24 h<strong>'+deltaText(delta(pts,24))+'</strong></span><span>7 Tage<strong>'+deltaText(delta(pts,168))+'</strong></span></div></article>';
-  }).join('');
-}
-function renderLegend() {
-  el('legend').innerHTML=hives.map(h=>'<button data-hive="'+h.name+'" class="'+(enabled.has(h.name)?'':'off')+'"><span class="dot" style="background:'+h.color+'"></span>'+h.name.replace('-Volk','')+'</button>').join('');
-  el('legend').querySelectorAll<HTMLButtonElement>('button').forEach(b=>b.onclick=()=>{const n=b.dataset.hive!;enabled.has(n)?enabled.delete(n):enabled.add(n);renderLegend();draw();});
-}
-function draw() {
-  const canvas=el<HTMLCanvasElement>('chart'),box=canvas.parentElement!.getBoundingClientRect(),dpr=devicePixelRatio||1;
-  canvas.width=Math.round(box.width*dpr);canvas.height=Math.round(box.height*dpr);
-  const c=canvas.getContext('2d')!;c.scale(dpr,dpr);const w=box.width,h=box.height,p={l:42,r:10,t:12,b:30},cutoff=Date.now()-days*86400000;
-  const series=hives.filter(x=>enabled.has(x.name)).map(x=>({h:x,p:(data.get(x.name)||[]).filter(q=>q.t>=cutoff)})).filter(x=>x.p.length);
-  const vals=series.flatMap(s=>s.p.map(p=>p.v));if(!vals.length){c.fillStyle='#888';c.font='13px system-ui';c.fillText('Noch keine archivierten Messwerte',20,60);return;}
-  let min=Math.min(...vals),max=Math.max(...vals);const pad=Math.max((max-min)*.12,1);min-=pad;max+=pad;
-  c.strokeStyle='#e2dfd5';c.lineWidth=1;c.fillStyle='#89897e';c.font='10px system-ui';c.textAlign='right';
-  for(let i=0;i<5;i++){const y=p.t+(h-p.t-p.b)*i/4;c.beginPath();c.moveTo(p.l,y);c.lineTo(w-p.r,y);c.stroke();c.fillText(fmt(max-(max-min)*i/4),p.l-7,y+3);}
-  c.textAlign='center';const labels=days===1?['-24h','-18h','-12h','-6h','Jetzt']:days===7?['-7T','-5T','-3T','-1T','Jetzt']:days===30?['-30T','-22T','-15T','-7T','Jetzt']:['-12M','-9M','-6M','-3M','Jetzt'];
-  labels.forEach((x,i)=>c.fillText(x,p.l+(w-p.l-p.r)*i/4,h-8));
-  const x0=Date.now()-days*86400000,x1=Date.now(),px=(t:number)=>p.l+(t-x0)/(x1-x0)*(w-p.l-p.r),py=(v:number)=>p.t+(max-v)/(max-min)*(h-p.t-p.b);
-  for(const s of series){c.strokeStyle=s.h.color;c.lineWidth=2;c.lineJoin='round';c.beginPath();s.p.forEach((q,i)=>i?c.lineTo(px(q.t),py(q.v)):c.moveTo(px(q.t),py(q.v)));c.stroke();}
-}
-document.querySelectorAll<HTMLButtonElement>('.ranges button').forEach(b=>b.onclick=async()=>{document.querySelectorAll('.ranges button').forEach(x=>x.classList.remove('active'));b.classList.add('active');days=Number(b.dataset.days);await refresh();});
-el<HTMLButtonElement>('refresh').onclick=()=>refresh(true);
-window.addEventListener('resize',draw);
-renderBeeYear();
-refresh();
+function renderMonth(){const m=YEAR[month];el('month-content').innerHTML=`<div class="month-intro"><div><span class="month-label">${MONTHS[month]} <span>/${m.season}</span></span><h3>${m.title}</h3></div><p>${m.watch}</p></div><div class="year-tasks">${m.items.map(([title,text],i)=>`<article><span class="task-number">0${i+1}</span><div><h4>${title}</h4><p>${text}</p></div></article>`).join('')}</div>`;document.querySelectorAll<HTMLButtonElement>('[data-month]').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.month)===month)));}
+async function load(){const id=++requestId;try{const r=await fetch(`/api/history?days=${days}`,{cache:'no-store',signal:AbortSignal.timeout(60000)});if(!r.ok)throw new Error('Archiv konnte nicht geladen werden. Bitte erneut versuchen.');const next=await r.json() as Data;if(!Array.isArray(next.hives)||next.hives.length!==4)throw new Error('Unerwartete Antwort des Archivs.');if(id!==requestId)return;data=next;renderCards();drawChart();}catch(error){if(id!==requestId)return;setMessage(error instanceof Error?error.message:'Verbindung fehlgeschlagen.',true);if(!data){el('cards').innerHTML='<p class="empty-card">Noch keine Messwerte geladen. Mit „Aktualisieren“ erneut versuchen.</p>';el('status').textContent='Archiv nicht erreichbar';}throw error;}}
+async function refresh(){if(busy)return;busy=true;const button=el('refresh') as HTMLButtonElement;button.disabled=true;button.classList.add('spinning');button.querySelector('span')!.textContent='Wird aktualisiert';setMessage('Neue Messwerte werden abgerufen …');
+ try{const r=await fetch('/api/sync',{method:'POST',signal:AbortSignal.timeout(190000)});const result=await r.json();if(!r.ok||!result.ok)throw new Error('Abruf nicht vollständig. Vorhandene Archivdaten werden angezeigt.');await load();setMessage(result.skipped?'Archiv neu geladen. Der letzte Import läuft noch oder liegt weniger als zwei Minuten zurück.':'Messwerte und Archiv aktualisiert.');}
+ catch(error){try{await load();}catch{}setMessage(error instanceof Error?error.message:'Aktualisierung fehlgeschlagen.',true);}finally{busy=false;button.disabled=false;button.classList.remove('spinning');button.querySelector('span')!.textContent='Aktualisieren';}}
+el('refresh').addEventListener('click',refresh);
+document.querySelectorAll<HTMLButtonElement>('[data-days]').forEach(b=>b.addEventListener('click',async()=>{days=Number(b.dataset.days);document.querySelectorAll<HTMLButtonElement>('[data-days]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));el('chart-note').textContent='Zeitraum wird geladen …';try{await load();setMessage('');}catch{}}));
+el('legend').addEventListener('click',e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-hive]');if(!b)return;const key=b.dataset.hive!;hidden.has(key)?hidden.delete(key):hidden.add(key);b.setAttribute('aria-pressed',String(!hidden.has(key)));drawChart();});
+el('relative').addEventListener('change',e=>{relative=(e.target as HTMLInputElement).checked;drawChart();});
+document.querySelectorAll<HTMLButtonElement>('[data-month]').forEach(b=>b.addEventListener('click',()=>{month=Number(b.dataset.month);renderMonth();}));
+renderMonth();void load().catch(()=>{});
+setInterval(()=>{if(!document.hidden&&!busy)void load().catch(()=>{});},300000);

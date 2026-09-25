@@ -1,15 +1,22 @@
 name: Archive ThingSpeak data
-
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
-
+permissions:
+  contents: read
+concurrency:
+  group: bee-archive
+  cancel-in-progress: false
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Trigger Bienenwaage archive sync
+      - name: Import and verify JSON result
+        shell: bash
         run: |
-          curl --fail --silent --show-error --retry 3 \
-            https://bienenwaage-daniel-c82d.vercel.app/api/cron
+          curl --fail-with-body --silent --show-error --max-time 200 --retry 3 --retry-delay 10 \
+            -X POST https://bienenwaage.vercel.app/api/sync -o result.json
+          cat result.json
+          jq -e '.ok == true and (.skipped == true or ((.channels | length) == 3 and all(.channels[]; .ok == true)))' result.json
