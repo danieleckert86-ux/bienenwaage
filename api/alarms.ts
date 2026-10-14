@@ -10,12 +10,13 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
  try {
   if(req.method==='GET')return res.json(await alarmStatus(admin));
   if(req.method!=='POST')return res.status(405).json({error:'GET oder POST erforderlich'});
-  if(!admin)return res.status(401).json({error:'Zum Ändern bitte den Verwaltungsschlüssel eingeben.'});
+  if(!admin)return res.status(401).json({error:'Zum Ändern bitte den Kennwort eingeben.'});
   const body=req.body;
   if(!body||typeof body!=='object')return res.status(400).json({error:'Ungültige Eingabe'});
   if(body.action==='pause') {
-   if(!HIVES.some(h=>h.key===body.hive))return res.status(400).json({error:'Unbekanntes Volk'});
-   await run(sql`INSERT INTO bee_alarm_pause(hive_key,started_at,until_at) VALUES(${body.hive},now(),now()+interval '2 hours') ON CONFLICT(hive_key) DO UPDATE SET started_at=now(),until_at=now()+interval '2 hours'`);
+   await run(sql`INSERT INTO bee_alarm_pause(hive_key,started_at,until_at) VALUES
+    ${sql.join(HIVES.map(h=>sql`(${h.key},now(),now()+interval '8 hours')`),sql`, `)}
+    ON CONFLICT(hive_key) DO UPDATE SET started_at=now(),until_at=now()+interval '8 hours'`);
   } else if(body.action==='settings') {
    if(!validThreshold(body.threshold)||typeof body.enabled!=='boolean')return res.status(400).json({error:'Grenzwert: 0,2 bis 10 kg.'});
    let list:string[];try{list=recipients(body.recipients);}catch(e){return res.status(400).json({error:(e as Error).message});}
