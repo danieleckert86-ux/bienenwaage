@@ -62,3 +62,15 @@ Sources: LWG Bienenpflege, Sommerbehandlung, Winterbehandlung (linked in the app
 ## Active production database (2026-09-25)
 
 Production uses Neon branch `br-blue-paper-b2856b6e`, named `production-dashboard`. It was cloned from the original branch and retains all 311,892 original raw records; per-colony ordered checksums and counts were verified identical before adoption. New readings are appended there. The original `br-wild-cherry-b2zuipsm` remains preserved. Vercel Preview currently points to the same branch: do not run destructive tests or migrations there. Future preview work must use a fresh isolated branch.
+
+## Schwarmalarm
+
+`migrations/002_swarm.sql` adds shared settings, per-colony two-hour work pauses, alarm events and per-recipient delivery records. Existing measurements remain untouched. Default threshold: **1 kg within 15 minutes**, confirmed by the next raw reading within another 15 minutes. Detects the confirmed April 11, 2026 red-colony swarm (1.33 kg); reversible hive lifting and isolated samples do not qualify. Two-hour event separation prevents repeated messages for one event. Detection uses original readings, never reduced chart points.
+
+The dashboard's **Schwarmalarm** section supports one threshold for all colonies and up to ten comma/newline-separated recipients. Every recipient receives a separate message. Reading recipient addresses and changing settings/pauses requires `ALARM_ADMIN_TOKEN` (server environment); enter it in the dashboard, or use a private URL fragment `#alarm-key=TOKEN`. The fragment is removed immediately and the token stays in session storage. Never commit or publicly share that link/token.
+
+Server environment required for delivery: `RESEND_API_KEY` and `ALARM_MAIL_FROM` (a sender on a verified Resend domain). Without these the dashboard explicitly says mail delivery is not configured. No sender domain is currently configured in the connected Resend account. An alternative existing mail provider can be integrated when selected; recipients alone do not establish sending credentials.
+
+`syncAll` checks alarms after import, independently of an open browser. April–August GitHub scheduling runs approximately every five minutes, otherwise every 15 minutes. Actual source readings remain approximately ten minutes apart; GitHub delays are possible. No promise of immediate delivery. Confirmation must be less than one hour old and after the settings' activation time, so backfills and deployment do not email historical alarms. Saving settings starts a new detection baseline. Emails use deterministic idempotency keys and persisted per-recipient status; “sent” means accepted by the provider, not proven inbox delivery. Pending sends expire after 23 hours. Paused colonies and removed recipients are skipped.
+
+Release only after applying the additive migration to an isolated branch and production. Preview `DATABASE_URL` must be isolated (see production notes above). The April 11 fixture and false-positive cases run in `npm test`.
