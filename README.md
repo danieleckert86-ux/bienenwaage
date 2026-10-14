@@ -82,3 +82,7 @@ The shared eight-hour pause is available without a password as requested. Public
 ## Gmail-Versand
 
 Set production `SMTP_USER` to the chosen Gmail/Googlemail sender and `SMTP_APP_PASSWORD` to a Google-generated app password (2-Step Verification required). Enter the secret directly in Vercel; never send it in chat or commit it. Deploy again after saving. SMTP credentials take precedence over Resend. Settings include an authenticated **Testmail senden** button using the same sender as automatic alarms, restricted to saved recipients and once per minute. Until credentials are present the UI reports that delivery is not configured. For ambiguous SMTP delivery results, the outbox records `SMTP-Status unklar` and does not automatically retry: unlike Resend, SMTP does not guarantee deduplication via an idempotency key. Inspect such cases before a manual retry.
+
+## Aktiver Versand · 14.10.2026
+
+Production uses Resend with a dedicated sending-only key and `Bienenstand <onboarding@resend.dev>`, the same sender address used by the morning newsletter. No Google app password is required. The shared Resend sender is limited to the account owner; additional distinct recipients require a verified sender domain. Googlemail aliases are normalized to their equivalent Gmail address only for transport, matching the verified Resend recipient; stored user addresses remain unchanged. Gmail SMTP remains an optional alternative and is inactive without its app password.

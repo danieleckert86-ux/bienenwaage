@@ -12,3 +12,10 @@ test('test mail requires authorization and cannot report success without sending
   const result=await request('Bearer Private-Test-123');assert.equal(result.status,503);assert.equal(result.data.testSent,undefined);assert.ok(result.data.error.includes('SMTP_APP_PASSWORD'));
  }finally{for(const [k,v] of previous){if(v===undefined)delete process.env[k];else process.env[k]=v;}}
 });
+
+test('Resend receives the canonical Gmail address for Googlemail aliases',async()=>{
+ const {deliveryRecipient}=await import('../lib/mail.js');
+ assert.equal(deliveryRecipient('bee@googlemail.com'),'bee@gmail.com');
+ assert.equal(deliveryRecipient('bee@gmail.com'),'bee@gmail.com');
+ assert.equal(deliveryRecipient('bee@example.com'),'bee@example.com');
+});
