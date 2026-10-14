@@ -22,7 +22,8 @@ export async function alarmStatus(privateView=false){
  (SELECT count(*)::int FROM bee_alarm_delivery d WHERE d.event_id=e.id AND sent_at IS NOT NULL) AS sent,
  (SELECT count(*)::int FROM bee_alarm_delivery d WHERE d.event_id=e.id AND sent_at IS NULL) AS pending
  FROM bee_alarm_events e ORDER BY detected_at DESC LIMIT 8`);
- return {threshold:Number(settings.threshold_kg),enabled:settings.enabled,mailReady:mailReady(),hasRecipients:settings.recipients.length>0,pauses,events,
+ const iso=(s:string)=>new Date(s).toISOString();
+ return {threshold:Number(settings.threshold_kg),enabled:settings.enabled,mailReady:mailReady(),hasRecipients:settings.recipients.length>0,pauses:pauses.map(p=>({...p,until_at:iso(p.until_at)})),events:events.map(e=>({...e,detected_at:iso(e.detected_at)})),
  ...(privateView?{recipients:settings.recipients}:{}),editable:privateView};
 }
 export async function checkAlarms(now=Date.now()) {
@@ -55,7 +56,9 @@ export async function checkAlarms(now=Date.now()) {
  }
  if(mailReady()) {
   const pending=await run(sql`SELECT d.event_id,d.recipient,e.* FROM bee_alarm_delivery d JOIN bee_alarm_events e ON e.id=d.event_id WHERE d.sent_at IS NULL AND e.created_at>now()-interval '23 hours' AND d.attempts<20 ORDER BY e.created_at LIMIT 20`);
+  const sendStarted=Date.now();
   for(const d of pending) {
+   if(Date.now()-sendStarted>20000)break;
    // Removed recipients and currently paused hives must not receive queued messages.
    if(!settings.recipients.includes(d.recipient)||pauses.some(p=>p.hive_key===d.hive_key&&Date.parse(p.until_at)>now))continue;
    const name=HIVES.find(h=>h.key===d.hive_key)!.name;
