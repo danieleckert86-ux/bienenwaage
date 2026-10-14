@@ -67,7 +67,7 @@ Production uses Neon branch `br-blue-paper-b2856b6e`, named `production-dashboar
 
 `migrations/002_swarm.sql` adds shared settings, eight-hour work pauses for all colonies, alarm events and per-recipient delivery records. Existing measurements remain untouched. Default threshold: **1 kg within 15 minutes**, confirmed by the next raw reading within another 15 minutes. Detects the confirmed April 11, 2026 red-colony swarm (1.33 kg); reversible hive lifting and isolated samples do not qualify. Two-hour event separation prevents repeated messages for one event. Detection uses original readings, never reduced chart points.
 
-The dashboard's **Einstellungen** dialog contains the **Schwarmalarm** controls and supports one threshold for all colonies and up to ten comma/newline-separated recipients. Every recipient receives a separate message. Reading recipient addresses and changing settings/pauses requires `ALARM_ADMIN_TOKEN` (server environment); enter it in the dashboard, or use a private URL fragment `#alarm-key=TOKEN`. The fragment is removed immediately and the token stays in session storage. Never commit or publicly share that link/token.
+The dashboard's **Einstellungen** dialog contains the **Schwarmalarm** controls and supports one threshold for all colonies and up to ten comma/newline-separated recipients. Every recipient receives a separate message. Reading recipient addresses and changing settings requires `ALARM_ADMIN_TOKEN` (server environment); enter it in the dashboard, or use a private URL fragment `#alarm-key=TOKEN`. The fragment is removed immediately and the token stays in session storage. Never commit or publicly share that link/token.
 
 Server environment required for delivery: `RESEND_API_KEY` and `ALARM_MAIL_FROM` (a sender on a verified Resend domain). Without these the dashboard explicitly says mail delivery is not configured. No sender domain is currently configured in the connected Resend account. An alternative existing mail provider can be integrated when selected; recipients alone do not establish sending credentials.
 
@@ -76,3 +76,5 @@ Server environment required for delivery: `RESEND_API_KEY` and `ALARM_MAIL_FROM`
 Release only after applying the additive migration to an isolated branch and production. Preview `DATABASE_URL` must be isolated (see production notes above). The April 11 fixture and false-positive cases run in `npm test`.
 
 The settings button opens a modal; alarm controls are hidden from the normal dashboard. One **Alle Völker pausieren · 8 h** button sets the same eight-hour pause on all four colonies atomically. Event separation remains two hours independently of the work pause.
+
+The shared eight-hour pause is available without a password as requested. Public pause responses omit recipient addresses and never unlock configuration. Changing recipients, threshold or enabled status still requires the management password.
