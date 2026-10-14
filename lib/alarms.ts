@@ -1,3 +1,4 @@
+import {renderAlarmEmail} from './alarm-email.js';
 import { mailReady,mailProvider,sendAlarmMail } from './mail.js';
 export {mailReady} from './mail.js';
 import { createHash,timingSafeEqual } from 'node:crypto';
@@ -64,13 +65,11 @@ export async function checkAlarms(now=Date.now()) {
    // Removed recipients and currently paused hives must not receive queued messages.
    if(!settings.recipients.includes(d.recipient)||pauses.some(p=>p.hive_key===d.hive_key&&Date.parse(p.until_at)>now))continue;
    const name=HIVES.find(h=>h.key===d.hive_key)!.name;
-   const fmt=(t:string)=>new Intl.DateTimeFormat('de-DE',{timeZone:'Europe/Berlin',dateStyle:'short',timeStyle:'short'}).format(new Date(t));
-   const kg=(v:number)=>new Intl.NumberFormat('de-DE',{maximumFractionDigits:2}).format(v);
-   const text=`Schwarmverdacht: ${name}\n\n${kg(d.loss_kg)} kg schneller Gewichtsverlust; durch Folgemessung bestätigt.\nErkannt: ${fmt(d.detected_at)}\nBestätigt: ${fmt(d.confirmed_at)}\nGewicht: ${kg(d.before_kg)} → ${kg(d.after_kg)} kg\nGrenzwert: ${kg(d.threshold_kg)} kg innerhalb von 15 Minuten.\n\nBitte zeitnah am Stand prüfen. Auch Arbeiten an der Beute können diesen Alarm auslösen.\nhttps://bienenwaage.vercel.app/#overview`;
+   const email=renderAlarmEmail({name,loss:Number(d.loss_kg),before:Number(d.before_kg),after:Number(d.after_kg),threshold:Number(d.threshold_kg),detected:d.detected_at,confirmed:d.confirmed_at});
    try {
     await run(sql`UPDATE bee_alarm_delivery SET attempts=attempts+1 WHERE event_id=${d.event_id} AND recipient=${d.recipient}`);
     if(mailProvider()==='gmail')await run(sql`UPDATE bee_alarm_delivery SET last_error='SMTP-Status unklar' WHERE event_id=${d.event_id} AND recipient=${d.recipient}`);
-    await sendAlarmMail(d.recipient,`Schwarmverdacht: ${name} – ${kg(d.loss_kg)} kg`,text,createHash('sha256').update(`${d.event_id}:${d.recipient}`).digest('hex'));
+    await sendAlarmMail(d.recipient,email.subject,email.text,createHash('sha256').update(`${d.event_id}:${d.recipient}`).digest('hex'),email.html);
     await run(sql`UPDATE bee_alarm_delivery SET sent_at=now(),last_error=null WHERE event_id=${d.event_id} AND recipient=${d.recipient}`);sent++;
    }catch(error){await run(sql`UPDATE bee_alarm_delivery SET last_error=CASE WHEN last_error='SMTP-Status unklar' THEN last_error ELSE 'Mailversand fehlgeschlagen' END WHERE event_id=${d.event_id} AND recipient=${d.recipient}`);console.error('alarm delivery failed',d.event_id);}
   }

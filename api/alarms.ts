@@ -1,3 +1,4 @@
+import {renderAlarmEmail} from '../lib/alarm-email.js';
 import { randomUUID } from 'node:crypto';
 import { mailReady,sendAlarmMail } from '../lib/mail.js';
 import type { VercelRequest,VercelResponse } from '@vercel/node';
@@ -21,10 +22,12 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
     ON CONFLICT(hive_key) DO UPDATE SET started_at=now(),until_at=now()+interval '8 hours'`);
   } else if(body.action==='test') {
    if(!mailReady())return res.status(503).json({error:'Für Gmail bitte SMTP_APP_PASSWORD in Vercel hinterlegen.'});
-   const [settings]=await run(sql`UPDATE bee_alarm_settings SET updated_at=now() WHERE id=1 AND updated_at<now()-interval '1 minute' RETURNING recipients`);
+   const [settings]=await run(sql`UPDATE bee_alarm_settings SET updated_at=now() WHERE id=1 AND updated_at<now()-interval '1 minute' RETURNING recipients,threshold_kg`);
    if(!settings)return res.status(429).json({error:'Bitte eine Minute vor der nächsten Testmail warten.'});
    if(!settings.recipients.length)return res.status(400).json({error:'Bitte zuerst einen Empfänger speichern.'});
-   for(const recipient of settings.recipients)await sendAlarmMail(recipient,'Testmail – Bienen-Dashboard / Schwarmalarm','Dies ist eine Testmail über den automatischen Versandweg des Bienen-Dashboards. Es wurde kein Schwarm erkannt.\n\nAlarmregel: mindestens 1 kg (bzw. der gespeicherte Grenzwert) innerhalb von 15 Minuten, bestätigt durch die nächste Messung.\nhttps://bienenwaage.vercel.app/',randomUUID());
+   const loss=Math.max(1.33,Number(settings.threshold_kg)+0.25);
+   const email=renderAlarmEmail({name:'Rotes Volk',loss,before:46.1,after:46.1-loss,threshold:Number(settings.threshold_kg),detected:new Date(Date.now()-10*60000).toISOString(),confirmed:new Date().toISOString(),test:true});
+   for(const recipient of settings.recipients)await sendAlarmMail(recipient,email.subject,email.text,randomUUID(),email.html);
    return res.json({...await alarmStatus(admin),testSent:true});
   } else if(body.action==='settings') {
    if(!validThreshold(body.threshold)||typeof body.enabled!=='boolean')return res.status(400).json({error:'Grenzwert: 0,2 bis 10 kg.'});
