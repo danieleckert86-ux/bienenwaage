@@ -78,3 +78,7 @@ Release only after applying the additive migration to an isolated branch and pro
 The settings button opens a modal; alarm controls are hidden from the normal dashboard. One **Alle Völker pausieren · 8 h** button sets the same eight-hour pause on all four colonies atomically. Event separation remains two hours independently of the work pause.
 
 The shared eight-hour pause is available without a password as requested. Public pause responses omit recipient addresses and never unlock configuration. Changing recipients, threshold or enabled status still requires the management password.
+
+## Gmail-Versand
+
+Set production `SMTP_USER` to the chosen Gmail/Googlemail sender and `SMTP_APP_PASSWORD` to a Google-generated app password (2-Step Verification required). Enter the secret directly in Vercel; never send it in chat or commit it. Deploy again after saving. SMTP credentials take precedence over Resend. Settings include an authenticated **Testmail senden** button using the same sender as automatic alarms, restricted to saved recipients and once per minute. Until credentials are present the UI reports that delivery is not configured. For ambiguous SMTP delivery results, the outbox records `SMTP-Status unklar` and does not automatically retry: unlike Resend, SMTP does not guarantee deduplication via an idempotency key. Inspect such cases before a manual retry.

@@ -1,3 +1,5 @@
+import { mailReady,mailProvider,sendAlarmMail } from './mail.js';
+export {mailReady} from './mail.js';
 import { createHash,timingSafeEqual } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 import { run,sql } from './db.js';
@@ -10,7 +12,6 @@ export function authorized(header:unknown) {
  try {input=decodeURIComponent(header.replace(/^Bearer /,''));}catch{return false;}
  return timingSafeEqual(createHash('sha256').update(input).digest(),createHash('sha256').update(expected).digest());
 }
-export function mailReady(){return Boolean(process.env.RESEND_API_KEY&&process.env.ALARM_MAIL_FROM);}
 export async function getSettings(){
  const [s]=await run(sql`SELECT * FROM bee_alarm_settings WHERE id=1`);
  if(!s)throw new Error('Alarm-Einstellungen fehlen');
@@ -56,7 +57,7 @@ export async function checkAlarms(now=Date.now()) {
   }
  }
  if(mailReady()) {
-  const pending=await run(sql`SELECT d.event_id,d.recipient,e.* FROM bee_alarm_delivery d JOIN bee_alarm_events e ON e.id=d.event_id WHERE d.sent_at IS NULL AND e.created_at>now()-interval '23 hours' AND d.attempts<20 ORDER BY e.created_at LIMIT 20`);
+  const pending=await run(sql`SELECT d.event_id,d.recipient,e.* FROM bee_alarm_delivery d JOIN bee_alarm_events e ON e.id=d.event_id WHERE d.sent_at IS NULL AND e.created_at>now()-interval '23 hours' AND d.attempts<20 AND d.last_error IS DISTINCT FROM 'SMTP-Status unklar' ORDER BY e.created_at LIMIT 20`);
   const sendStarted=Date.now();
   for(const d of pending) {
    if(Date.now()-sendStarted>20000)break;
@@ -68,10 +69,10 @@ export async function checkAlarms(now=Date.now()) {
    const text=`Schwarmverdacht: ${name}\n\n${kg(d.loss_kg)} kg schneller Gewichtsverlust; durch Folgemessung bestätigt.\nErkannt: ${fmt(d.detected_at)}\nBestätigt: ${fmt(d.confirmed_at)}\nGewicht: ${kg(d.before_kg)} → ${kg(d.after_kg)} kg\nGrenzwert: ${kg(d.threshold_kg)} kg innerhalb von 15 Minuten.\n\nBitte zeitnah am Stand prüfen. Auch Arbeiten an der Beute können diesen Alarm auslösen.\nhttps://bienenwaage.vercel.app/#overview`;
    try {
     await run(sql`UPDATE bee_alarm_delivery SET attempts=attempts+1 WHERE event_id=${d.event_id} AND recipient=${d.recipient}`);
-    const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json','Idempotency-Key':createHash('sha256').update(`${d.event_id}:${d.recipient}`).digest('hex')},body:JSON.stringify({from:process.env.ALARM_MAIL_FROM,to:[d.recipient],subject:`Schwarmverdacht: ${name} – ${kg(d.loss_kg)} kg`,text}),signal:AbortSignal.timeout(15000)});
-    if(!response.ok)throw new Error(`Mailanbieter: HTTP ${response.status}`);
+    if(mailProvider()==='gmail')await run(sql`UPDATE bee_alarm_delivery SET last_error='SMTP-Status unklar' WHERE event_id=${d.event_id} AND recipient=${d.recipient}`);
+    await sendAlarmMail(d.recipient,`Schwarmverdacht: ${name} – ${kg(d.loss_kg)} kg`,text,createHash('sha256').update(`${d.event_id}:${d.recipient}`).digest('hex'));
     await run(sql`UPDATE bee_alarm_delivery SET sent_at=now(),last_error=null WHERE event_id=${d.event_id} AND recipient=${d.recipient}`);sent++;
-   }catch(error){await run(sql`UPDATE bee_alarm_delivery SET last_error='Mailversand fehlgeschlagen' WHERE event_id=${d.event_id} AND recipient=${d.recipient}`);console.error('alarm delivery failed',d.event_id);}
+   }catch(error){await run(sql`UPDATE bee_alarm_delivery SET last_error=CASE WHEN last_error='SMTP-Status unklar' THEN last_error ELSE 'Mailversand fehlgeschlagen' END WHERE event_id=${d.event_id} AND recipient=${d.recipient}`);console.error('alarm delivery failed',d.event_id);}
   }
  }
  return {checked:true,created,sent,mailReady:mailReady()};
