@@ -6,12 +6,18 @@ let key=sessionStorage.getItem('bee-alarm-key')||'';
 const fragment=new URLSearchParams(location.hash.slice(1));
 if(fragment.has('alarm-key')) {key=fragment.get('alarm-key')!;sessionStorage.setItem('bee-alarm-key',key);history.replaceState(null,'',location.pathname+location.search+'#schwarmalarm');}
 export function initAlarms(){
- const section=document.createElement('section');section.id='schwarmalarm';section.className='year-panel alarm-panel';
- section.innerHTML=`<h2>Schwarmalarm</h2><p class="panel-subtitle">Ein gemeinsamer Grenzwert für alle vier Völker. Alarm bei schnellem Gewichtsverlust innerhalb von 15 Minuten, bestätigt durch die nächste Messung.</p><p id="alarm-status" role="status">Alarm-Einstellungen werden geladen …</p>
- <details id="alarm-settings"><summary>Einstellungen & Empfänger</summary><form id="alarm-form"><div id="alarm-unlock"><label>Verwaltungsschlüssel <input id="alarm-key" type="password" autocomplete="off"></label><button type="button" id="alarm-unlock-button" class="refresh">Entsperren</button></div>
- <fieldset id="alarm-fields" disabled><label>Grenzwert für alle Völker (kg)<input id="alarm-threshold" type="number" min="0.2" max="10" step="0.1" value="1" required></label><label>E-Mail-Empfänger<textarea id="alarm-recipients" rows="3" placeholder="name@beispiel.de, weitere@beispiel.de"></textarea></label><small>Bis zu zehn Adressen, getrennt durch Komma oder Zeilenumbruch. Jede Adresse erhält eine eigene Mail.</small><label class="compare"><input id="alarm-enabled" type="checkbox" checked>Schwarmalarm April–August aktiv</label><button class="refresh" type="submit">Einstellungen speichern</button></fieldset></form></details>
+ const section=document.createElement('dialog');section.id='schwarmalarm';section.className='alarm-panel alarm-dialog';section.setAttribute('aria-labelledby','alarm-title');
+ section.innerHTML=`<div class="alarm-heading"><h2 id="alarm-title">Schwarmalarm</h2><button id="alarm-close" class="refresh" type="button" aria-label="Einstellungen schließen">Schließen</button></div><p class="panel-subtitle">Ein gemeinsamer Grenzwert für alle vier Völker. Alarm bei schnellem Gewichtsverlust innerhalb von 15 Minuten, bestätigt durch die nächste Messung.</p><p id="alarm-status" role="status">Alarm-Einstellungen werden geladen …</p>
+ <div id="alarm-settings"><form id="alarm-form"><div id="alarm-unlock"><label>Kennwort <input id="alarm-key" type="password" autocomplete="off"></label><button type="button" id="alarm-unlock-button" class="refresh">Entsperren</button></div>
+ <fieldset id="alarm-fields" disabled><label>Grenzwert für alle Völker (kg)<input id="alarm-threshold" type="number" min="0.2" max="10" step="0.1" value="1" required></label><label>E-Mail-Empfänger<textarea id="alarm-recipients" rows="3" placeholder="name@beispiel.de, weitere@beispiel.de"></textarea></label><small>Bis zu zehn Adressen, getrennt durch Komma oder Zeilenumbruch. Jede Adresse erhält eine eigene Mail.</small><label class="compare"><input id="alarm-enabled" type="checkbox" checked>Schwarmalarm April–August aktiv</label><button class="refresh" type="submit">Einstellungen speichern</button></fieldset></form></div>
  <div id="alarm-pauses" class="alarm-pauses"></div><p class="aside-note">„Arbeiten am Volk“ pausiert die Erkennung für dieses Volk zwei Stunden. Die Messwerte werden weiter gespeichert. Die Waage erkennt einen Schwarmverdacht, keine sichere Diagnose.</p><div id="alarm-events"></div><p id="alarm-message" role="status" aria-live="polite"></p>`;
- document.querySelector('#bienenjahr')!.before(section);
+ document.body.append(section);
+ const settingsButton=document.createElement('button');settingsButton.type='button';settingsButton.className='refresh';settingsButton.textContent='⚙ Einstellungen';settingsButton.setAttribute('aria-haspopup','dialog');
+ document.querySelector('.overview-tools')!.append(settingsButton);
+ settingsButton.addEventListener('click',()=>{section.showModal();void action();});
+ section.querySelector('#alarm-close')!.addEventListener('click',()=>section.close());
+ section.addEventListener('click',e=>{if(e.target===section){const r=section.getBoundingClientRect();const m=e as MouseEvent;if(m.clientX<r.left||m.clientX>r.right||m.clientY<r.top||m.clientY>r.bottom)section.close();}});
+ if(location.hash==='#schwarmalarm')section.showModal();
  const el=(id:string)=>document.getElementById(id)!;
  const headers=():Record<string,string>=>key?{Authorization:`Bearer ${key}`}:{ };
  function render(s:Status){
@@ -26,7 +32,7 @@ export function initAlarms(){
  }
  async function request(body?:unknown){const r=await fetch('/api/alarms',{method:body?'POST':'GET',headers:{...headers(),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',signal:AbortSignal.timeout(30000)});const s=await r.json();if(!r.ok)throw new Error(s.error||'Alarm-Einstellungen nicht erreichbar');render(s);return s as Status;}
  async function action(body?:unknown){try{await request(body);el('alarm-message').textContent=body?'Gespeichert.':'';}catch(e){el('alarm-message').textContent=(e as Error).message;}}
- el('alarm-unlock-button').addEventListener('click',async()=>{key=(el('alarm-key') as HTMLInputElement).value.trim();try{const s=await request();if(!s.editable)throw new Error('Verwaltungsschlüssel ungültig.');sessionStorage.setItem('bee-alarm-key',key);el('alarm-message').textContent='Einstellungen entsperrt.';}catch(e){el('alarm-message').textContent=(e as Error).message;}});
+ el('alarm-unlock-button').addEventListener('click',async()=>{key=(el('alarm-key') as HTMLInputElement).value.trim();try{const s=await request();if(!s.editable)throw new Error('Kennwort ungültig.');sessionStorage.setItem('bee-alarm-key',key);el('alarm-message').textContent='Einstellungen entsperrt.';}catch(e){el('alarm-message').textContent=(e as Error).message;}});
  el('alarm-form').addEventListener('submit',e=>{e.preventDefault();void action({action:'settings',threshold:Number((el('alarm-threshold') as HTMLInputElement).value),recipients:(el('alarm-recipients') as HTMLTextAreaElement).value,enabled:(el('alarm-enabled') as HTMLInputElement).checked});});
  el('alarm-pauses').addEventListener('click',e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-pause]');if(b)void action({action:'pause',hive:b.dataset.pause});});
  void action();
