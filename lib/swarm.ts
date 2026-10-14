@@ -11,10 +11,6 @@ export function recipients(value:unknown):string[] {
  if(list.length>10||list.some(s=>s.length>254||!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(s)))throw new Error('Maximal zehn gültige E-Mail-Adressen, getrennt durch Komma oder Zeilenumbruch.');
  return list;
 }
-export function season(t:number) {
- const month=Number(new Intl.DateTimeFormat('en',{timeZone:'Europe/Berlin',month:'numeric'}).format(t));
- return month>=4&&month<=8;
-}
 // Use raw adjacent readings. A second independent reading must confirm the loss.
 export function detectSwarms(samples:Sample[],threshold:number):Swarm[] {
  if(!validThreshold(threshold))throw new Error('Ungültiger Grenzwert');

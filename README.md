@@ -21,7 +21,7 @@ The existing `hive_measurements` table and all historical measurements are prese
 - HTTP timeouts, expiring lease and idempotent retries recover after interruptions.
 - Older manual imports use `npm run backfill -- YYYY-MM-DD YYYY-MM-DD` with a privileged server-side DATABASE_URL. The old public backfill endpoint returns 410.
 
-GitHub Actions `.github/workflows/archive-thingspeak.yml` triggers every 15 minutes (07/22/37/52), retries failed requests and validates the JSON body. GitHub does not guarantee exact start times and may disable inactive public-repository schedules after prolonged inactivity. Monitor Actions and the visible import timestamp. Manual refresh remains available.
+GitHub Actions `.github/workflows/archive-thingspeak.yml` triggers every five minutes year-round (02/07/12/…), retries failed requests and validates the JSON body. GitHub does not guarantee exact start times and may disable inactive public-repository schedules after prolonged inactivity. Monitor Actions and the visible import timestamp. Manual refresh remains available.
 
 ## Read API
 
@@ -71,7 +71,7 @@ The dashboard's **Einstellungen** dialog contains the **Schwarmalarm** controls 
 
 Server environment required for delivery: `RESEND_API_KEY` and `ALARM_MAIL_FROM` (a sender on a verified Resend domain). Without these the dashboard explicitly says mail delivery is not configured. No sender domain is currently configured in the connected Resend account. An alternative existing mail provider can be integrated when selected; recipients alone do not establish sending credentials.
 
-`syncAll` checks alarms after import, independently of an open browser. April–August GitHub scheduling runs approximately every five minutes, otherwise every 15 minutes. Actual source readings remain approximately ten minutes apart; GitHub delays are possible. No promise of immediate delivery. Confirmation must be less than one hour old and after the settings' activation time, so backfills and deployment do not email historical alarms. Saving settings starts a new detection baseline. Emails use deterministic idempotency keys and persisted per-recipient status; “sent” means accepted by the provider, not proven inbox delivery. Pending sends expire after 23 hours. Paused colonies and removed recipients are skipped.
+`syncAll` checks alarms after import, independently of an open browser. GitHub scheduling runs approximately every five minutes year-round. Actual source readings remain approximately ten minutes apart; GitHub delays are possible. No promise of immediate delivery. Confirmation must be less than one hour old and after the settings' activation time, so backfills and deployment do not email historical alarms. Saving settings starts a new detection baseline. Emails use deterministic idempotency keys and persisted per-recipient status; “sent” means accepted by the provider, not proven inbox delivery. Pending sends expire after 23 hours. Paused colonies and removed recipients are skipped.
 
 Release only after applying the additive migration to an isolated branch and production. Preview `DATABASE_URL` must be isolated (see production notes above). The April 11 fixture and false-positive cases run in `npm test`.
 
@@ -86,3 +86,7 @@ Set production `SMTP_USER` to the chosen Gmail/Googlemail sender and `SMTP_APP_P
 ## Aktiver Versand · 14.10.2026
 
 Production uses Resend with a dedicated sending-only key and `Bienenstand <onboarding@resend.dev>`, the same sender address used by the morning newsletter. No Google app password is required. The shared Resend sender is limited to the account owner; additional distinct recipients require a verified sender domain. Googlemail aliases are normalized to their equivalent Gmail address only for transport, matching the verified Resend recipient; stored user addresses remain unchanged. Gmail SMTP remains an optional alternative and is inactive without its app password.
+
+## Ganzjähriger Alarm · 14.10.2026
+
+The swarm alert no longer has a month/season filter: January through December use the same detection and delivery rules. The five-minute scheduler is also year-round. Enabled status, threshold, recipients and work pauses remain configurable; historical/backfilled events remain excluded by freshness and activation time.

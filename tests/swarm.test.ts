@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {detectSwarms,recipients,validThreshold,season} from '../lib/swarm.js';
+import {detectSwarms,recipients,validThreshold} from '../lib/swarm.js';
 const start=Date.parse('2026-04-11T10:33:47Z');
 const sample=(values:number[],step=10*60000)=>values.map((v,i)=>({t:start+i*step,v}));
 test('confirmed red colony swarm on April 11 is detected at 1 kg, missed at 1.5',()=>{
@@ -19,7 +19,7 @@ test('shared threshold and multiple recipients validate',()=>{
  assert.deepEqual(recipients('A@example.de, b@example.de\na@example.de'),['a@example.de','b@example.de']);
  assert.throws(()=>recipients('broken'));assert.throws(()=>recipients('x@example.de\r\nBcc: evil@example.de'));
  assert.equal(validThreshold('1'),false);assert.equal(validThreshold(NaN),false);assert.equal(validThreshold(1),true);
- assert.equal(season(Date.parse('2026-04-11')),true);assert.equal(season(Date.parse('2026-10-11')),false);
+
 });
 
 test('multiple small steps within 15 minutes accumulate to threshold',()=>{assert.equal(detectSwarms(sample([46,45.6,45.3,45,45],5*60000),1).length,1);});
@@ -28,4 +28,9 @@ test('management password with umlaut uses transport-safe encoding',async()=>{
  const {authorized}=await import('../lib/alarms.js');
  const previous=process.env.ALARM_ADMIN_TOKEN;process.env.ALARM_ADMIN_TOKEN='Grüner-Test-123!';
  try{assert.equal(authorized('Bearer '+encodeURIComponent('Grüner-Test-123!')),true);assert.equal(authorized('Bearer Gruner-Test-123!'),false);assert.equal(authorized('Bearer %broken'),false);}finally{if(previous===undefined)delete process.env.ALARM_ADMIN_TOKEN;else process.env.ALARM_ADMIN_TOKEN=previous;}
+});
+
+test('swarm detection applies equally to winter measurements',()=>{
+ const winter=Date.parse('2026-12-11T11:00:00Z');
+ assert.equal(detectSwarms([46,44.7,44.7].map((v,i)=>({t:winter+i*600000,v})),1).length,1);
 });

@@ -5,7 +5,7 @@ import { createHash,timingSafeEqual } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 import { run,sql } from './db.js';
 import { HIVES } from './hives.js';
-import { detectSwarms,season,COOLDOWN } from './swarm.js';
+import { detectSwarms,COOLDOWN } from './swarm.js';
 export function authorized(header:unknown) {
  const expected=process.env.ALARM_ADMIN_TOKEN;
  if(!expected||typeof header!=='string')return false;
@@ -31,7 +31,7 @@ export async function alarmStatus(privateView=false){
 }
 export async function checkAlarms(now=Date.now()) {
  const settings=await getSettings();
- if(!settings.enabled||!season(now))return {checked:true,season:season(now),created:0,sent:0,mailReady:mailReady()};
+ if(!settings.enabled)return {checked:true,created:0,sent:0,mailReady:mailReady()};
  const q=neon(process.env.DATABASE_URL!);
  const since=Date.parse(settings.active_since);
  let created=0,sent=0;
@@ -45,7 +45,7 @@ export async function checkAlarms(now=Date.now()) {
   const rows=measurements.filter(r=>r.hive_key===hive.key);
   const candidates=detectSwarms(rows.map(r=>({t:Date.parse(r.measured_at),v:Number(r.weight_kg)})),Number(settings.threshold_kg));
   for(const e of candidates) {
-   if(e.start<since||now-e.confirmed>60*60_000||e.confirmed>now||!season(e.detected))continue;
+   if(e.start<since||now-e.confirmed>60*60_000||e.confirmed>now)continue;
    if(pauses.some(p=>p.hive_key===hive.key&&e.start<=Date.parse(p.until_at)&&e.confirmed>=Date.parse(p.started_at)))continue;
    if(recentEvents.some(r=>r.hive_key===hive.key&&Date.parse(r.detected_at)>e.detected-COOLDOWN&&Date.parse(r.detected_at)<=e.detected))continue;
    const id=`${hive.key}-${e.detected}`;
