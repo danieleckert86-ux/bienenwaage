@@ -1,3 +1,4 @@
+import { initAlarms } from './alarms';
 import { Chart,LineController,LineElement,PointElement,LinearScale,Tooltip,Filler,type ChartDataset } from 'chart.js';
 import { MONTHS,YEAR } from './year';
 import './styles.css';
@@ -35,7 +36,7 @@ function renderCards(){if(!data)return;
  const old=data.hives.filter(stale);el('status').innerHTML=`<span class="status-dot ${old.length?'warning':''}"></span>${old.length?`${old.length} von 4 Völkern ohne frische Messung`:'Alle 4 Völker senden Daten'} <span class="status-extra">· Abgerufen ${new Intl.DateTimeFormat('de-DE',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Berlin'}).format(data.generatedAt)}</span>`;
  el('legend').innerHTML=data.hives.map(h=>`<button data-hive="${h.key}" aria-pressed="${!hidden.has(h.key)}" style="--hive:${h.color}"><span class="legend-dot"></span>${h.name.replace(' Volk','').replace('-Volk','')}</button>`).join('');
  renderInsights();
- el('archive-detail').innerHTML=`<p>Rohmesswerte werden dauerhaft archiviert. Änderungen beziehen sich auf die letzte Messung und einen Vergleichswert höchstens 60 Minuten vor dem Zielzeitpunkt. Fehlt dieser, steht dort „—“.</p><ul>${data.hives.map(h=>`<li>${h.name}: seit ${h.firstAt?date(h.firstAt,true):'—'}</li>`).join('')}</ul><h3>Letzter erfolgreicher Abruf je Kanal</h3><ul>${data.sync.map(s=>`<li>${s.channel}: ${s.succeeded_at?date(Date.parse(s.succeeded_at),true):'noch kein Abruf'}${s.last_error?' · Abruf fehlgeschlagen':''}${s.cursor_at?`<br>Rückstände geprüft bis ${date(Date.parse(s.cursor_at),true)}`:''}</li>`).join('')}</ul><p>Automatischer Abgleich etwa alle 15 Minuten. GitHub Actions kann Ausführungen verzögern. Rohwerte bleiben auch bei verdichteter Diagrammansicht erhalten.</p>`;
+ el('archive-detail').innerHTML=`<p>Rohmesswerte werden dauerhaft archiviert. Änderungen beziehen sich auf die letzte Messung und einen Vergleichswert höchstens 60 Minuten vor dem Zielzeitpunkt. Fehlt dieser, steht dort „—“.</p><ul>${data.hives.map(h=>`<li>${h.name}: seit ${h.firstAt?date(h.firstAt,true):'—'}</li>`).join('')}</ul><h3>Letzter erfolgreicher Abruf je Kanal</h3><ul>${data.sync.map(s=>`<li>${s.channel}: ${s.succeeded_at?date(Date.parse(s.succeeded_at),true):'noch kein Abruf'}${s.last_error?' · Abruf fehlgeschlagen':''}${s.cursor_at?`<br>Rückstände geprüft bis ${date(Date.parse(s.cursor_at),true)}`:''}</li>`).join('')}</ul><p>Automatischer Abgleich in der Schwarmzeit etwa alle 5 Minuten, sonst alle 15 Minuten. GitHub Actions kann Ausführungen verzögern. Rohwerte bleiben auch bei verdichteter Diagrammansicht erhalten.</p>`;
 }
 function renderInsights(){if(!data)return;const items:{title:string;text:string;warn:boolean}[]=[];
  for(const h of data.hives){if(stale(h))items.push({title:`${h.name}: Daten fehlen`,text:h.latest?`Letzte Messung ${date(h.latest.t)}. Waage, Verbindung und Import prüfen.`:'Noch keine Messwerte vorhanden.',warn:true});if(h.jump)items.push({title:`${h.name}: Gewichtssprung`,text:`${delta(h.jump.delta)} kg zwischen zwei Messungen · ${date(h.jump.t)}. Eingriff oder Ursache prüfen.`,warn:true});}
@@ -69,5 +70,5 @@ document.querySelectorAll<HTMLButtonElement>('[data-days]').forEach(b=>b.addEven
 el('legend').addEventListener('click',e=>{const b=(e.target as HTMLElement).closest<HTMLButtonElement>('[data-hive]');if(!b)return;const key=b.dataset.hive!;hidden.has(key)?hidden.delete(key):hidden.add(key);b.setAttribute('aria-pressed',String(!hidden.has(key)));drawChart();});
 el('relative').addEventListener('change',e=>{relative=(e.target as HTMLInputElement).checked;drawChart();});
 document.querySelectorAll<HTMLButtonElement>('[data-month]').forEach(b=>b.addEventListener('click',()=>{month=Number(b.dataset.month);renderMonth();}));
-renderMonth();void load().catch(()=>{});
+initAlarms();renderMonth();void load().catch(()=>{});
 setInterval(()=>{if(!document.hidden&&!busy)void load().catch(()=>{});},300000);

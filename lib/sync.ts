@@ -1,3 +1,4 @@
+import { checkAlarms } from './alarms.js';
 import { randomUUID } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 import { run, sql } from './db.js';
@@ -55,7 +56,8 @@ export async function syncAll() {
         return {channel,ok:false,inserted};
       }
     }));
-    return {ok:channels.every(c=>c.ok),skipped:false,channels};
+    const alarms=await checkAlarms();
+    return {ok:channels.every(c=>c.ok),skipped:false,channels,alarms};
   } finally {
     await run(sql`UPDATE bee_sync_lease SET expires_at=now(),next_allowed_at=now()+interval '2 minutes' WHERE id=1 AND token=${token}`);
   }
