@@ -19,7 +19,7 @@ export function initAlarms(){
  section.addEventListener('click',e=>{if(e.target===section){const r=section.getBoundingClientRect();const m=e as MouseEvent;if(m.clientX<r.left||m.clientX>r.right||m.clientY<r.top||m.clientY>r.bottom)section.close();}});
  if(location.hash==='#schwarmalarm')section.showModal();
  const el=(id:string)=>document.getElementById(id)!;
- const headers=():Record<string,string>=>key?{Authorization:`Bearer ${key}`}:{ };
+ const headers=():Record<string,string>=>key?{Authorization:`Bearer ${encodeURIComponent(key)}`}:{ };
  function render(s:Status){
   (el('alarm-threshold') as HTMLInputElement).value=String(s.threshold);
   (el('alarm-enabled') as HTMLInputElement).checked=s.enabled;

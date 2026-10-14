@@ -6,7 +6,8 @@ import { detectSwarms,season,COOLDOWN } from './swarm.js';
 export function authorized(header:unknown) {
  const expected=process.env.ALARM_ADMIN_TOKEN;
  if(!expected||typeof header!=='string')return false;
- const input=header.replace(/^Bearer /,'');
+ let input:string;
+ try {input=decodeURIComponent(header.replace(/^Bearer /,''));}catch{return false;}
  return timingSafeEqual(createHash('sha256').update(input).digest(),createHash('sha256').update(expected).digest());
 }
 export function mailReady(){return Boolean(process.env.RESEND_API_KEY&&process.env.ALARM_MAIL_FROM);}

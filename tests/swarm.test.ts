@@ -23,3 +23,9 @@ test('shared threshold and multiple recipients validate',()=>{
 });
 
 test('multiple small steps within 15 minutes accumulate to threshold',()=>{assert.equal(detectSwarms(sample([46,45.6,45.3,45,45],5*60000),1).length,1);});
+
+test('management password with umlaut uses transport-safe encoding',async()=>{
+ const {authorized}=await import('../lib/alarms.js');
+ const previous=process.env.ALARM_ADMIN_TOKEN;process.env.ALARM_ADMIN_TOKEN='Grüner-Test-123!';
+ try{assert.equal(authorized('Bearer '+encodeURIComponent('Grüner-Test-123!')),true);assert.equal(authorized('Bearer Gruner-Test-123!'),false);assert.equal(authorized('Bearer %broken'),false);}finally{if(previous===undefined)delete process.env.ALARM_ADMIN_TOKEN;else process.env.ALARM_ADMIN_TOKEN=previous;}
+});
