@@ -3,8 +3,7 @@ on:
   push:
     branches: [main]
     paths: [".github/workflows/archive-thingspeak.yml"]
-  schedule:
-    - cron: '2-57/5 * * * *'
+  # Scheduled imports are handled by Google Apps Script (every 5 minutes).
   workflow_dispatch:
 permissions:
   contents: read
