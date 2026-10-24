@@ -29,10 +29,29 @@ export async function syncAll() {
     WHERE bee_sync_lease.expires_at<=now() AND bee_sync_lease.next_allowed_at<=now() RETURNING id`);
   if(!lease.length) return {ok:true,skipped:true,reason:'already-running-or-recent',channels:[]};
   try {
-    const channels=await Promise.all([...new Set(HIVES.map(h=>h.channel))].map(async channel=>{
-      let inserted=0;
+    const channelIds=[...new Set(HIVES.map(h=>h.channel))];
+    // Always ingest the latest readings for every channel first. A slow or broken
+    // historical import must never hold the swarm alarm behind it.
+    const live=await Promise.all(channelIds.map(async channel=>{
       try {
         await run(sql`UPDATE bee_sync_state SET attempted_at=now() WHERE channel=${channel}`);
+        const inserted=await save(channel,await fetchLive(channel),null);
+        return {channel,ok:true,inserted};
+      } catch(error) {
+        console.error('live sync channel',channel,error);
+        await run(sql`UPDATE bee_sync_state SET last_error='Live-Abruf fehlgeschlagen' WHERE channel=${channel}`);
+        return {channel,ok:false,inserted:0};
+      }
+    }));
+    // Alarm mails are sent before the (potentially expensive) historical catch-up.
+    const alarms=await checkAlarms();
+    const channels=await Promise.all(channelIds.map(async channel=>{
+      const current=live.find(c=>c.channel===channel)!;
+      let inserted=current.inserted;
+      try {
+        // Recheck a sliding 24-hour window on every run to heal recent holes,
+        // regardless of the historical cursor. Upserts do not duplicate readings.
+        inserted+=await save(channel,await fetchWindow(channel,Date.now()-DAY-3_600_000,Date.now()),null);
         const [state]=await run(sql`SELECT cursor_at FROM bee_sync_state WHERE channel=${channel}`);
         let cursor=state?.cursor_at ? Date.parse(state.cursor_at):null;
         if(!cursor) {
@@ -40,24 +59,21 @@ export async function syncAll() {
           const [row]=await run(sql`SELECT min(t) AS t FROM (SELECT max(measured_at) AS t FROM hive_measurements WHERE hive_key IN (${sql.join(keys.map(k=>sql`${k}`),sql`,`)}) GROUP BY hive_key) x`);
           cursor=row?.t ? Date.parse(row.t)-DAY:now-DAY;
         }
-        // Current measurements are independent of backlog progress.
-        inserted+=await save(channel,await fetchLive(channel),null);
-        // Bounded catch-up: at most 3 days per invocation; never advance past a failed window.
+        // Historical backlog is intentionally low priority.
         for(let batch=0;batch<3 && cursor<now;batch++) {
-          const end=Math.min(cursor+DAY,now);
-          const feeds=await fetchWindow(channel,cursor-3_600_000,end);
-          inserted+=await save(channel,feeds,end);
-          cursor=end;
+          const finish=Math.min(cursor+DAY,now);
+          inserted+=await save(channel,await fetchWindow(channel,cursor-3_600_000,finish),finish);
+          cursor=finish;
         }
-        return {channel,ok:true,inserted,caughtUp:cursor>=now};
+        return {channel,ok:current.ok,inserted,caughtUp:cursor>=now};
       } catch(error) {
-        console.error('sync channel',channel,error);
-        await run(sql`UPDATE bee_sync_state SET last_error='Abruf oder Speicherung fehlgeschlagen' WHERE channel=${channel}`);
+        console.error('history sync channel',channel,error);
+        await run(sql`UPDATE bee_sync_state SET last_error='Historischer Abgleich fehlgeschlagen' WHERE channel=${channel}`);
         return {channel,ok:false,inserted};
       }
     }));
-    const alarms=await checkAlarms();
     return {ok:channels.every(c=>c.ok),skipped:false,channels,alarms};
+
   } finally {
     await run(sql`UPDATE bee_sync_lease SET expires_at=now(),next_allowed_at=now()+interval '2 minutes' WHERE id=1 AND token=${token}`);
   }
